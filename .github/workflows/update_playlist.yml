@@ -1,0 +1,50 @@
+name: Sync M3U to Markdown
+
+on:
+  push:
+    branches:
+      - main
+    # Spustí se POUZE, když se upraví tyto konkrétní soubory
+    paths:
+      - 'aria.m3u'
+      - 'aria+.m3u'
+      - 'updater.py'
+  schedule:
+    # Nechal jsem ti tu i ten cron, kdybys chtěl pravidelnou pojistku
+    - cron: '0 0 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-channels:
+    runs-on: ubuntu-latest
+    # DŮLEŽITÉ: Ochrana proti nekonečné smyčce
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run the conversion script
+        run: python updater.py
+
+      - name: Commit and Push generated Markdown files
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # The -A parameter ensures new files are added, existing ones are updated,
+          # and any deleted states are correctly removed from the channels folder.
+          git add -A channels/
+          
+          # If there are no changes, git commit will fail. 
+          # Přidal jsem [skip ci] do zprávy, aby to nespouštělo další zbytečné akce!
+          git commit -m "chore: auto-update markdowns from m3u [skip ci]" || echo "No changes to commit"
+          git push
